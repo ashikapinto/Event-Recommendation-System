@@ -195,3 +195,72 @@ for a,b in distinct_user_pairs:
     similarity_mat[i, j] = coeff
     similarity_mat[j, i] = coeff
 sio.mmwrite("event\\similaritymatrix", similarity_mat)
+
+# To generate the event - event similarity matrix
+# There are two main aspects that can be considered the event meta data and the event content based on which the similarity 
+# matrix can be generated. So, we decide to generate two similarity matrices for the events one based on the event meta data
+# for which the similarity measure used is correlation and the other based on the content which uses the cosine similarity measure.
+
+# Reading the file for the processing.
+fin = open("F:\\Rachana\\SEM-5\\Data_Analytics\\Project\\Datasets\\events.csv", 'r')
+# Skipping the first line as it includes the column names.
+fin.readline()
+# Determining the number of distinct events.
+n_evts = len(event_index.keys())
+# Generating the sparse matrices to store the feature vectors for each event
+# 1. Based on the event meta data
+evt_prop_matrix = ss.dok_matrix((n_evts, 7))
+# 2. Based on the event content
+evt_cont_matrix = ss.dok_matrix((n_evts, 100))
+z = 0
+# Populating the previously created sparse matrices with the feature vectors corresponding to the distinct events by reading the events.csv file.
+for line in fin.readlines():
+    z += 1
+    cols = line.strip().split(",")
+    e_id = cols[0]
+    if e_id in event_index:
+        i = event_index[e_id]
+        # Cleaning the data read from the file by using the functions defined previously
+        # 1. Populating the event Properties matrix
+        evt_prop_matrix[i, 0] = encode_joined_month(cols[2]) # start_time
+        evt_prop_matrix[i, 1] = feature_hash(bytes(cols[3], "utf-8")) # city
+        evt_prop_matrix[i, 2] = feature_hash(bytes(cols[4], "utf-8")) # state
+        evt_prop_matrix[i, 3] = feature_hash(bytes(cols[5], "utf-8")) # zip
+        evt_prop_matrix[i, 4] = feature_hash(bytes(cols[6], "utf-8")) # country
+        evt_prop_matrix[i, 5] = float_value(cols[7]) # lat
+        evt_prop_matrix[i, 6] = float_value(cols[8]) # lon
+        # 2. Populating the event content matrix
+        for j in range(9, 109):
+            evt_cont_matrix[i, j-9] = cols[j]
+fin.close()
+# Normalizing the columns of the matrices generated to make sure that the values measured on the different scales 
+# do no add unnecessary meaning or correlation.
+# For both the matrices l1 norm or Manhattan distance is being used.
+evt_prop_matrix = normalize(evt_prop_matrix, norm="l1", axis=0, copy=False)
+sio.mmwrite("EV_eventPropMatrix", evt_prop_matrix)
+evt_cont_matrix = normalize(evt_cont_matrix, norm="l1", axis=0, copy=False)
+sio.mmwrite("EV_eventContMatrix", evt_cont_matrix)
+
+# Objects that calculate the correlation and cosine similarity measure when two feature vectors are given
+psim=ssd.correlation
+csim=ssd.cosine
+
+# Generating the similarity matrices to later populate with the similarity measures.
+evt_prop_sim = ss.dok_matrix((n_evts, n_evts))
+evt_cont_sim = ss.dok_matrix((n_evts, n_evts))
+
+# Populating the similarity matrices by calculating the correlation and cosine similarity for the meta data based and content based
+# matrices.
+for e1, e2 in distinct_event_pairs:
+    i = event_index[e1]
+    j = event_index[e2]
+    if evt_prop_sim[i,j] == 0.0:
+        epsim = psim(evt_prop_matrix.getrow(i).todense(), evt_prop_matrix.getrow(j).todense())
+        evt_prop_sim[i, j] = epsim
+        evt_prop_sim[j, i] = epsim
+    if evt_cont_sim[i,j] == 0.0:
+        ecsim = csim(evt_cont_matrix.getrow(i).todense(), evt_cont_matrix.getrow(j).todense())
+        evt_cont_sim[i, j] = ecsim
+        evt_cont_sim[j, i] = ecsim
+sio.mmwrite("EV_eventPropSim", evt_prop_sim)
+sio.mmwrite("EV_eventContSim", evt_cont_sim)
