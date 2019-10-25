@@ -264,3 +264,46 @@ for e1, e2 in distinct_event_pairs:
         evt_cont_sim[j, i] = ecsim
 sio.mmwrite("EV_eventPropSim", evt_prop_sim)
 sio.mmwrite("EV_eventContSim", evt_cont_sim)
+
+
+#The friends of the specified user are found out 
+#The idea is that: (a) people with more friends are more likely to attend events 
+#(b) if your friend is going, its more likely for you to go as well
+
+#Determining the number of distinct users
+nusers = len(user_index.keys())
+numFriends = np.zeros((nusers))
+userFriends = ss.dok_matrix((nusers, nusers))
+#reading the data for preprocessing
+#the user_friends.csv wasnt uploaded due to huge size
+fin = open("C:\\Users\\anvitha poosarla\\Downloads\\user_friends.csv", 'r')
+# skip header
+fin.readline()  
+ln = 0
+for line in fin:
+      cols = line.strip().split(",")
+      user = cols[0]
+      if user in user_index :
+        friends = cols[1].split(" ")
+        i = user_index[user]
+        numFriends[i] = len(friends)
+        for friend in friends:
+          if friend in user_index :
+            j = user_index[friend]
+            # the objective of this score is to infer the degree to
+            # and direction in which this friend will influence the
+            # user's decision, so we sum the user/event score for
+            # this user across all training events.
+            eventsForUser =user_event_response.getrow(j).todense()
+            score = eventsForUser.sum() / np.shape(eventsForUser)[1]
+            userFriends[i, j] += score
+            userFriends[j, i] += score
+        ln += 1
+fin.close()
+# normalize the arrays
+sumNumFriends =numFriends.sum(axis=0)
+numFriends = numFriends / sumNumFriends
+sio.mmwrite("C:\\Users\\anvitha poosarla\\Downloads\\event-recommendation-engine-challenge\\num_friends", np.matrix(numFriends))
+#using the l1 norm or the manhattan distance
+userFriends = normalize(userFriends, norm="l1", axis=0, copy=False)
+sio.mmwrite("C:\\Users\\anvitha poosarla\\Downloads\\event-recommendation-engine-challenge\\user_friends", userFriends)
